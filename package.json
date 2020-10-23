@@ -1,0 +1,14 @@
+{
+    "name": "iot-msg-stack",
+    "description": "IOT message processing stack, including connectors towards devices (eg Kerlink WMC/SPN http apis), generic message decoding, and IOT Thing/ DynamoDB integration",
+    "version": "0.0.1",
+    "private": true,
+    "dependencies": {
+    },
+    "devDependencies": {
+        "jest": "^24.7.1"
+    },
+    "scripts": {
+        "test": "jest"
+    }
+}
