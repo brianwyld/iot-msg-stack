@@ -5,8 +5,8 @@
 var aws  = require('aws-sdk');
 var httpclient = require('https');
 
-let WMC_USER = 'wyld-things-app';       // MOVE TO ENV VARS
-let WMC_PASS = 'wyld-things01';
+let WMC_USER = 'xxx';       // MOVE TO ENV VARS
+let WMC_PASS = 'yyy';
 let WMC_SERVER = 'https://wmc-poc.wanesy.com';
 
 let WMC_URL_SEND_DL =   WMC_SERVER+'/gms/application/dataDown';
