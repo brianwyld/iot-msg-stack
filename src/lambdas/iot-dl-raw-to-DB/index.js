@@ -1,11 +1,8 @@
 // Receive messages (DL) and send to DB for logging
 var aws  = require('aws-sdk');
 
-let MSG_TABLE='IOT-MSGS';
-// Seconds for expiry time (5 days for testing)
-let MSG_EXPIRATION_DURATION = (5*24*60*60);
-
-var _dynoDB= new aws.DynamoDB({apiVersion: 'latest'});
+var ddb_device = require('ddb_device');
+var ddb_msgs = require('ddb_msgs');
 
 exports.handler = async (event) => {
     // Check device type is ok. Note message MUST be json
@@ -13,7 +10,10 @@ exports.handler = async (event) => {
     var msg = JSON.parse(event.Records[0].Sns.Message);
     console.log("rx decoded:"+JSON.stringify(msg));
     if (msg!==undefined && msg.to!==undefined) {
-        return addMsgToTable(msg)
+        var now = new Date();
+        await ddb_device.updateDevice(msg.to, { 'lastDLTime': now.toISOString()});
+
+        return ddb_msgs.addMsgToTable(msg.to, 'DL', msg)
             .then(function(data) {
                 console.log('ADDED DL msg from ['+msg.to+'] as '+JSON.stringify(data));
             })
@@ -26,110 +26,3 @@ exports.handler = async (event) => {
     }
 
 };
-
-// Return value 'v' if not undefined, else default 'd'
-function VoD(v, d) {
-    if (v!==undefined) {
-        return v;
-    }
-    return d;
-}
-
-// Returns promise or throws error
-async function addMsgToTable(msg) {
-    if (await checkOrCreateTable()) {
-        // add to table
-        var now = new Date();
-        // Build update expression (note don't use AttributeUpdate as docs recommend using UpdateExpression (no reason given...))
-        var attrvals = {
-                ':d':{ 'S':'DL'},
-                ':mp':{ 'S':VoD(msg.msgProtocol, 'app-core')},
-                ':t':{ 'S':VoD(msg.type, 'lora')},
-                ':c':{ 'S':VoD(msg.connector, 'UNKNOWN')},
-                ':et': { 'N': ''+(now.getTime() + MSG_EXPIRATION_DURATION) }
-
-        };
-        var updateExpression ='SET dir=:d, msgProtocol=:mp, nettype=:t, connector=:c, expiryTime=:et';
-        if (msg.gwInfo!==undefined) {
-            // Todo generic parse of gwinfo (non-lora specific) to get explicit attributes eg rssi? 
-            attrvals[':ni'] =  { 'S':JSON.stringify(msg.gwInfo)},
-            updateExpression += ', netinfo=:ni';
-        }
-        if (msg.payload.rawhex!==undefined) {
-           attrvals[':rh'] = { 'S':msg.payload.rawhex };
-           updateExpression += ', payload_rawhex=:rh';
-        }
-        if (msg.payload.rawtlv!==undefined) {
-            attrvals[':rt'] = { 'S':JSON.stringify(msg.payload.rawtlv) };
-            updateExpression += ', payload_rawtlv=:rt';
-        }
-        if (msg.payload.config!==undefined || msg.payload.actions!==undefined) {
-            attrvals[':g'] = { 'S':JSON.stringify(msg.payload.config)+','+JSON.stringify(msg.payload.actions) };
-            updateExpression += ', payload_decoded=:g';
-        }
-            
-        var params = {
-            TableName:MSG_TABLE,
-            Key: { 
-                'DevName': {'S':VoD(msg.type, 'lora')+'-'+msg.to}, 
-                'Timestamp':{'S':now.toISOString() }, 
-            },
-            ExpressionAttributeValues : attrvals,
-            UpdateExpression : updateExpression
-        };
-        console.log('updating with:'+JSON.stringify(params));
-        return new Promise(function(resolve, reject) {
-            _dynoDB.updateItem(params, function(err, data) {
-                if (err) {
-                    console.log('failed to insert message'+err);
-                    reject(err);
-                } else {
-                    resolve(data);
-                }
-            })    
-        });
-    }        
-    throw new Error('failed to access table');
-}
-
-async function checkOrCreateTable() {
-    var tdesc = await new Promise(function(resolve, reject) { 
-        _dynoDB.describeTable({ 'TableName':MSG_TABLE}, function(err, data) {
-            if (err) {
-                console.log('failed to find table:'+err);
-                resolve(null);
-            } else resolve(data);
-        });
-    });
-    if (tdesc===null) {
-        // Create table structure on the fly
-        var params = {
-            TableName : MSG_TABLE,
-            KeySchema: [
-                { AttributeName: "DevName", KeyType: "HASH"},
-                { AttributeName: "Timestamp", KeyType: "RANGE" }
-            ],
-            AttributeDefinitions: [
-                { AttributeName: "DevName", AttributeType: "S" },
-                { AttributeName: "Timestamp", AttributeType: "S" }
-            ],
-            ProvisionedThroughput: {
-                ReadCapacityUnits: 5,
-                WriteCapacityUnits: 5
-            }
-        };
-
-        var tcreated = await new Promise(function(resolve, reject) { 
-            _dynoDB.createTable(params, function(err, data) {
-                if (err) {
-                    console.log('missing table ['+MSG_TABLE+'], creating failed:'+err);
-                    resolve(false);
-                } else {
-                    resolve(true);
-                }
-            });
-        });
-        return tcreated;
-    }
-    return true;        // everything is ok
-}

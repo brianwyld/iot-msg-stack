@@ -2,6 +2,8 @@
 // this decoder is for app-core standard UL messages
 var aws  = require('aws-sdk');
 
+var sns = require('sns');
+
 var UL_TOPIC = "arn:aws:sns:eu-west-1:581930022841:iot-ul-decoded";
 exports.handler = async (event) => {
     // Check device type is ok. Note message MUST be json
@@ -15,7 +17,7 @@ exports.handler = async (event) => {
         msg.payload.generic = mapTLVs(msg.payload.rawtlv);
         // And send it on
         console.log("tx decoded:"+JSON.stringify(msg));
-        return sns_publish(UL_TOPIC, msg);
+        return sns.publish(UL_TOPIC, msg);
     } else {
         console.log("badness, received non-app-core message");
         res='not app-core protocol : '+msg.msgProtocol;
@@ -48,16 +50,32 @@ function decodeTLV(data) {
 		}
 		return decodedPayload;
 }
-function parseIntLE16(s) {
-	var hexS = ""+s.substr(2,2)+s.substr(0,2);
+function parseIntLE32(s, o=0) {
+	var hexS = ""+s.substr(o+6,2)+s.substr(o+4,2)+s.substr(o+2,2)+s.substr(o,2);
+	return parseInt(hexS,16);
+}
+function parseIntLE16(s, o=0) {
+	var hexS = ""+s.substr(o+2,2)+s.substr(o,2);
 	return parseInt(hexS,16);
 }
 function parseIntByte(s, o=0) {
-	return parseInt(s.substr(o,o+2),16);
+	return parseInt(s.substr(o,2),16);
 }
+
+var FW_LIST= {
+  'id-hashOfName':'name of fw target',
+  'id-130955857':'wbasev2-topas-eu868-filleBLE-prod',
+  'id-1060906211':'wbasev2-sobat-eu868-filleBLE-prod',
+  'id-3302131578':'wbasev2-bibeacon-eu868-none-prod'
+
+};
 function mapTLVs(tlv) {
     var ret = {};
-	if (tlv.T00!==undefined) ret.fwVersion = { major:parseIntByte(tlv.T00), minor:parseIntByte(tlv.T00, 2), build:parseIntByte(tlv.T00,4), id:parseIntByte(tlv.T00,6)};
+	if (tlv.T00!==undefined){
+        var fwid = parseIntLE32(tlv.T00,8);
+        ret.fwVersion = { major:parseIntByte(tlv.T00), minor:parseIntByte(tlv.T00, 2), build:parseIntLE16(tlv.T00,4), id:fwid};  
+        ret.fwName = FW_LIST['id-'+fwid]!==undefined ? FW_LIST['id-'+fwid] : 'ID-UNKNOWN';
+	} 
 	if (tlv.T03!==undefined) ret.temperature = parseIntLE16(tlv.T03);
 	if (tlv.T04!==undefined) ret.pressure = parseIntLE16(tlv.T04);
 	if (tlv.T05!==undefined) ret.humidity = parseIntByte(tlv.T05);
@@ -78,31 +96,4 @@ function mapTLVs(tlv) {
 	// One appdata if present
 	if (tlv.TF0!==undefined) ret.appdata = tlv.TF0;
 	return ret;
-}
-
-// Returns a promise
-function sns_publish(topic, msg, tags={}) {
-    var sns = new aws.SNS({"accessKeyId ":"mykey"});
-    var params = {
-        Message: JSON.stringify(msg), /* required */
-        MessageStructure: 'String',     /* because its not json with different message per endpoint... */
-        MessageAttributes: tags,
-        TopicArn: topic
-    };
-    const promise = new Promise(function(resolve, reject) {
-        sns.publish(params, function(err, data) {
-            if (err) {
-                console.log('SNS error occured:'+err, err.stack); // an error occurred
-                reject(Error(err));
-            } else {
-                console.log('SNS data sent ok:'+data);           // successful response
-                const response = {
-                  statusCode: 200,
-                    body: JSON.stringify('Sent'),
-                };
-                resolve(response);
-            }
-        });
-    });
-    return promise;
 }

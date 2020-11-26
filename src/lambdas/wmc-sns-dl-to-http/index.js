@@ -5,8 +5,8 @@
 var aws  = require('aws-sdk');
 var httpclient = require('https');
 
-let WMC_USER = 'xxx';       // MOVE TO ENV VARS
-let WMC_PASS = 'yyy';
+let WMC_USER = 'wyld-things-app';       // MOVE TO ENV VARS
+let WMC_PASS = 'wyld-things01';
 let WMC_SERVER = 'https://wmc-poc.wanesy.com';
 
 let WMC_URL_SEND_DL =   WMC_SERVER+'/gms/application/dataDown';
@@ -19,7 +19,7 @@ exports.handler = async (event) => {
     var reqbody = { ttl:60, fPort:3, confirmed:false, contentType:"HEXA" };
     var msg = JSON.parse(event.Records[0].Sns.Message);
     if (msg.payload!==undefined) {
-        reqbody.endDevice = { devEui: msg.to };
+        reqbody.endDevice = { devEui: getAddr(msg.to) };
         if (msg.payload.ttl!==undefined) {
             reqbody.ttl = msg.payload.ttl;
         }
@@ -29,7 +29,7 @@ exports.handler = async (event) => {
         if (msg.payload.rawhex!==undefined) {
             reqbody.payload = msg.payload.rawhex;
         } else {
-            res = "missing payload hex, cannot DL to "+msg.to;
+            res = "missing payload hex, cannot DL to "+getAddr(msg.to);
         }
     } else {
         res = 'missing payload, cannot DL';
@@ -60,6 +60,15 @@ exports.handler = async (event) => {
     };
     return response;
 };
+
+// return device address from a device id format <comm>-<addr>
+function getAddr(did) {
+    var di = did.indexOf('-');
+    if (di<0) {
+        return did;
+    }
+    return did.substr(di);
+}
 
 // execute token get, returns promise to execute
 async function reqToken() {

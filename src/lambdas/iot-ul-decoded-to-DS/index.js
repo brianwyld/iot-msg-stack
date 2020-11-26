@@ -8,7 +8,7 @@ exports.handler = async (event) => {
     var msg = JSON.parse(event.Records[0].Sns.Message);
     if (msg!==undefined) {
         // Device names is 'comm protocol'-'comm network address'
-        var did = msg.type+'-'+msg.from;
+        var did = msg.from;
         console.log('updating DS for ['+did+']');
         // update config
         return updateThingEnv(did, msg.payload.generic)
