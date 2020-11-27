@@ -37,6 +37,8 @@ Parameters:
 # Resources declares the AWS resources that you want to include in the stack
 # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html
 Resources:
+  # Add API Key TODO
+  # Add API Usage plan TODO
 
   # IAM Role and policies for the Lambdas/API to access other resources
   IOTPolicy_SNS:
@@ -164,6 +166,22 @@ Resources:
           ReadCapacityUnits: "5"
           WriteCapacityUnits: "5"
 
+  iot-devices-DDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: "DDB-${AppId}-IOT-DEVICES"
+            AttributeDefinitions: 
+              -
+                AttributeName: "id"
+                AttributeType : "S"
+            KeySchema : 
+              -
+                AttributeName: "id"
+                KeyType: "HASH"
+            ProvisionedThroughput: 
+                ReadCapacityUnits: "5"
+                WriteCapacityUnits: "5"
+        
   # Lambda functions, hooked to eithe APIGateway REST API endpoints or SNS topics
   # Each Lambda function is defined by new SAM specific Function Resources:
   # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -296,3 +314,17 @@ Resources:
           Type: SNS
           Properties:
             Topic: !Ref iot-dl-raw-SNSTopic
+     
+  # Lambda ttn-http-ul-to-sns
+  wmchttpultosnsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/lambdas/ttn-http-ul-to-sns/index.handler
+      Description: Lambda function to map TTN http POST for an UL to an SNS message
+      Role: !Ref IOTOperationRole
+      Events:
+        iot-wmc-ul-HTTPAPI:
+          Type: HttpApi
+          Properties:
+            Path: /iot/ttn/dataup
+            Method: ANY

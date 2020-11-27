@@ -20,7 +20,7 @@ exports.handler = async (event) => {
             if (device===undefined) {
                 device = await ddb_device.createDevice({ 'id':did, 'msgProtocol': 'app-core', 'appTag':'generic' });
             }
-            await ddb_device.updateDevice(did, { 'lastRSSI': '-50'});
+            await ddb_device.updateDevice(did, { 'lastRSSI': -50}, 'netinfo');
             
             // Note the device object is a DynamoDB Item, so has attribute typing ie access as device.<attr>.S
             // Send 'generic' json message for uplinks

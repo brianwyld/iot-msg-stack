@@ -74,7 +74,7 @@ function mapTLVs(tlv) {
 	if (tlv.T00!==undefined){
         var fwid = parseIntLE32(tlv.T00,8);
         ret.fwVersion = { major:parseIntByte(tlv.T00), minor:parseIntByte(tlv.T00, 2), build:parseIntLE16(tlv.T00,4), id:fwid};  
-        ret.fwName = FW_LIST['id-'+fwid]!==undefined ? FW_LIST['id-'+fwid] : 'ID-UNKNOWN';
+        ret.fwName = FW_LIST['id-'+fwid]!==undefined ? FW_LIST['id-'+fwid] : 'ID-UNKNOWN-'+fwid;
 	} 
 	if (tlv.T03!==undefined) ret.temperature = parseIntLE16(tlv.T03);
 	if (tlv.T04!==undefined) ret.pressure = parseIntLE16(tlv.T04);

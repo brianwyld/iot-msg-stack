@@ -14,21 +14,22 @@ exports.handler = async (event) => {
             var postdata = JSON.parse(event.body);
             // device unique id is <comm type>-<addr>
             var did = 'lora-'+postdata.endDevice.devEui;
-            // Lookup iot to find device "lora-<deveui>" and get its attribute 'msgProtocol', 'sk-appTag'
-            var device = await ddb_device.findDevice(did);
+            // Lookup iot to find device "lora-<deveui>" and get its attribute 'msgProtocol', 'appTag'
+            var device = await ddb_device.findDevice(did, ['msgProtocol', 'appTag']);
             if (device===undefined) {
                 device = await ddb_device.createDevice({ 'id':did, 'msgProtocol': 'app-core', 'appTag':'generic' });
             }
-            await ddb_device.updateDevice(did, { 'lastRSSI': '-50'});
+            if (await ddb_device.updateDevice(did, { 'lastRSSI': -50}, 'netinfo')===null) {
+                console.log("failed to update device with rssi");
+            }
             
-            // Note the device object is a DynamoDB Item, so has attribute typing ie access as device.<attr>.S
             // Send 'generic' json message for uplinks
             var ulmsg = { 
                 gwInfo : postdata.gwInfo,
                 from : did,
                 type : 'lora',
-                msgProtocol: device.msgProtocol.S,
-                appTag : device.appTag.S,
+                msgProtocol: device.msgProtocol,
+                appTag : device.appTag,
                 connector : 'KLK-WMC-V3-HTTP',
                 rxTime : postdata.recvTime,
                 payload: { fPort: postdata.fPort, fCntUp:postdata.fCntUp, fCntDown:postdata.fCntDown }
@@ -44,7 +45,7 @@ exports.handler = async (event) => {
             }
             console.log("sns UL msg:"+JSON.stringify(ulmsg));
             // Send to SNS topic - add 'tag' with protocol so correct listener decodes it (MessageAttribute)
-            return sns.publish(UL_TOPIC, ulmsg, { msgProtocol: { DataType: 'String', StringValue:device.msgProtocol.S}, appTag : { DataType: 'String', StringValue:device.appTag.S}} );
+            return sns.publish(UL_TOPIC, ulmsg, { msgProtocol: { DataType: 'String', StringValue:device.msgProtocol}, appTag : { DataType: 'String', StringValue:device.appTag}} );
         } else {
             console.log("missing body");
             res='Missing body';

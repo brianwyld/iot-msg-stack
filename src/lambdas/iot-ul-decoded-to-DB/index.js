@@ -9,9 +9,13 @@ exports.handler = async (event) => {
     var msg = JSON.parse(event.Records[0].Sns.Message);
     console.log("rx decoded:"+JSON.stringify(msg));
     if (msg!==undefined && msg.from!==undefined) {
-        // Update generic decoded values as attributes of the device
+        // Update tlv decoded values as attributes of the device, in the sub-object 'data_tlv'
+        if (msg.payload.rawtlv!==undefined) {
+            await ddb_device.updateDevice(msg.from, msg.payload.rawtlv, 'data_rawtlv' );
+        }
+        // Update generic decoded values as attributes of the device, in the sub-object 'data_generic'
         if (msg.payload.generic!==undefined) {
-            await ddb_device.updateDevice(msg.from, msg.payload.generic);
+            await ddb_device.updateDevice(msg.from, msg.payload.generic, 'data_generic' );
         }
         return ddb_msgs.addMsgToTable(msg.from, 'UL', msg)
             .then(function(data) {
@@ -26,3 +30,4 @@ exports.handler = async (event) => {
     }
 
 };
+
