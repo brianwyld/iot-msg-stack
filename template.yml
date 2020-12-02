@@ -186,6 +186,9 @@ Resources:
   # Each Lambda function is defined by new SAM specific Function Resources:
   # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
 
+  # The lambdas require a layer (with utility functions and an api to the DDB)
+  # TODO BUILD LAYER
+
   # Lambda iot-dl-encode-appcore
   iotdlencodeappcoreFunction:
     Type: AWS::Serverless::Function
@@ -193,7 +196,6 @@ Resources:
       Handler: src/lambdas/iot-dl-encode-appcore/index.handler
       Description: Lambda function to encode DL for appcore protocol
       Role: !Ref IOTOperationRole
-      #        - AWSLambdaBasicExecutionRole
       Events:
         iot-dl-decoded-SNSSub-appcore:
           Type: SNS
@@ -262,19 +264,7 @@ Resources:
           Type: SNS
           Topic: !Ref iot-ul-decoded-SNSTopic
 
-  # Lambda iot-ul-decoded-to-DS
-  iotuldecodedtoDSFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: src/lambdas/iot-ul-decoded-to-DS/index.handler
-      Description: Lambda function to write attributes from decoded UL to a Things DeviceShadow
-      Role: !Ref IOTOperationRole
-      Events:
-        iot-ul-decoded-SNSSub:
-          Type: SNS
-          Topic: !Ref iot-ul-decoded-SNSTopic
-
-  # Lambda wmc-htp-dl-event-to-sns
+  # Lambda wmc-http-dl-event-to-sns
   wmchttpdleventtosnsFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -327,4 +317,32 @@ Resources:
           Type: HttpApi
           Properties:
             Path: /iot/ttn/dataup
+            Method: ANY
+
+  # Lambda iot-devices-list
+  iotdeviceslistFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/lambdas/iot-devices-list/index.handler
+      Description: Lambda function for REST API to list devices in DB
+      Role: !Ref IOTOperationRole
+      Events:
+        iot-devices-list-HTTPAPI:
+          Type: HttpApi
+          Properties:
+            Path: /iot/entities/{entity}/devices
+            Method: GET
+
+  # Lambda iot-device-CRUD
+  iotdeviceCRUDFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/lambdas/iot-device-CRUD/index.handler
+      Description: Lambda function for REST API to create/read/update/delete a device in DB
+      Role: !Ref IOTOperationRole
+      Events:
+        iot-device-CRUD-HTTPAPI:
+          Type: HttpApi
+          Properties:
+            Path: /iot/entities/{entity}/devices/{id}
             Method: ANY
