@@ -1,4 +1,4 @@
-// emulate Wyres GLM tags list accessor
+// device list accessor
 var aws  = require('aws-sdk');
 
 var ddb_device = require('ddb_device');
