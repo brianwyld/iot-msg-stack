@@ -1,0 +1,5 @@
+{
+    "name": "iot-utility",
+    "description":"IOT utility layer for AWS lambda stack",
+    "version": "1.0.0"
+}

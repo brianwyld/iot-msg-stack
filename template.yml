@@ -11,6 +11,53 @@ Description: >-
 # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/transform-section-structure.html
 Transform: AWS::Serverless-2016-10-31
 
+Parameters:
+  AppId:
+    Type: String
+    Default:
+  # TTN config
+  P_TTN_APPID:
+    Type: String
+    Default:
+  P_TTN_PROCESSID:
+    Type: String
+    Default:
+  P_TTN_KEY:
+    Type: String
+    Default:
+  P_TTN_SERVER:
+    Type: String
+    Default:
+  # WMC config
+  P_WMC_SERVER:
+    Type: String
+    Default:
+  P_WMC_USER:
+    Type: String
+    Default:
+  P_WMC_PASS:
+    Type: String
+    Default:
+  # internal setup config : keep defaults unless good reason not to
+  P_DDB_TABLE_DEVICES:
+    Type: String
+    Default: IOT-DEVICES
+  P_DDB_TABLE_MSGS:
+    Type: String
+    Default: IOT-MSGS
+  P_SNS_UL_RAW:
+    Type: String
+    Default: iot-ul-raw
+  P_SNS_UL_DECODED:
+    Type: String
+    Default: iot-ul-decoded
+  P_SNS_DL_DECODED:
+    Type: String
+    Default: iot-dl-decoded
+  P_SNS_DL_RAW:
+    Type: String
+    Default: iot-dl-raw
+    
 # Shared configuration for all resources, more in
 # https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
@@ -24,15 +71,18 @@ Globals:
     Runtime: nodejs12.x
     MemorySize: 128
     Timeout: 60
+    Layers:
+      - !Ref iotUtilityLayer      
     Environment:
       Variables:
         CONFIG_NAME: iot-msg-stack
         CONFIG_ID: ${AppId}
-
-Parameters:
-  AppId:
-    Type: String
-
+        DDB_TABLE_DEVICES: !Ref P_DDB_TABLE_DEVICES
+        DDB_TABLE_MSGS: !Ref P_DDB_TABLE_MSGS
+        SNS_UL_DECODED: !Ref P_SNS_UL_DECODED
+        SNS_UL_RAW: !Ref P_SNS_UL_RAW
+        SNS_DL_DECODED: !Ref P_SNS_DL_DECODED
+        SNS_DL_RAW: !Ref P_SNS_DL_RAW
 
 # Resources declares the AWS resources that you want to include in the stack
 # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html
@@ -41,7 +91,7 @@ Resources:
   # Add API Usage plan TODO
 
   # IAM Role and policies for the Lambdas/API to access other resources
-  IOTPolicy_SNS:
+  IOTPolicySNS:
     Type: AWS::IAM::Policy
     Properties:
       PolicyName: "IOTPolicy_SNS"
@@ -55,7 +105,7 @@ Resources:
               - 'SNS:*'
             Resource: '*'
 
-  IOTPolicy_IOT:
+  IOTPolicyIOT:
     Type: AWS::IAM::Policy
     Properties:
       PolicyName: "IOTPolicy_IOT"
@@ -69,7 +119,7 @@ Resources:
               - 'IOT:*'
             Resource: '*'
 
-  IOTPolicy_DDB:
+  IOTPolicyDDB:
     Type: AWS::IAM::Policy
     Properties:
       PolicyName: "IOTPolicy_DDB"
@@ -83,7 +133,7 @@ Resources:
               - 'DynamoDB:*'
             Resource: '*'
 
-  IOTPolicy_CWL:
+  IOTPolicyCWL:
     Type: AWS::IAM::Policy
     Properties:
       PolicyName: "IOTPolicy_CWL"
@@ -106,7 +156,7 @@ Resources:
   IOTStackApplication:
     Type: AWS::AppConfig::Application
     Properties:
-      Name:"IOStack"
+      Name:"IOTStack"
   IOTStackConfigurationProfile:
     Type: AWS::AppConfig::ConfigurationProfile
     Properties:
@@ -124,27 +174,27 @@ Resources:
       ContentType: "application/json"
 
   # SNS topics
-  iot-dl-raw-SNSTopic:
+  iotDlRawSNSTopic:
     Type: AWS::SNS::SNSTopic
-    TopicName: topic-${AppId}-iot-dl-raw
+    TopicName: P_SNS_DL_RAW
 
-  iot-dl-decoded-SNSTopic:
+  iotDlDecodedSNSTopic:
     Type: AWS::SNS::SNSTopic
-    TopicName: topic-${AppId}-iot-dl-decoded
+    TopicName: P_SNS_DL_DECODED
 
-  iot-ul-raw-SNSTopic:
+  iotUlRawSNSTopic:
     Type: AWS::SNS::SNSTopic
-    TopicName: topic-${AppId}-iot-ul-raw
+    TopicName: P_SNS_UL_RAW
 
-  iot-ul-decoded-SNSTopic:
+  iotUlDecodedSNSTopic:
     Type: AWS::SNS::SNSTopic
-    TopicName: topic-${AppId}-iot-ul-decoded
+    TopicName: !Ref P_SNS_UL_DECODED
   
   # Dynamo DB table
-  iot-msgs-DDBTable:
+  iotMsgsDDBTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: "DDB-${AppId}-IOT-MSGS"
+      TableName: "IOT-MSGS"
       AttributeDefinitions: 
         -
           AttributeName: "DevName"
@@ -166,183 +216,246 @@ Resources:
           ReadCapacityUnits: "5"
           WriteCapacityUnits: "5"
 
-  iot-devices-DDBTable:
+  iotDevicesDDBTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: "DDB-${AppId}-IOT-DEVICES"
-            AttributeDefinitions: 
-              -
-                AttributeName: "id"
-                AttributeType : "S"
-            KeySchema : 
-              -
-                AttributeName: "id"
-                KeyType: "HASH"
-            ProvisionedThroughput: 
-                ReadCapacityUnits: "5"
-                WriteCapacityUnits: "5"
-        
+      TableName: "IOT-DEVICES"
+      AttributeDefinitions: 
+        -
+          AttributeName: "id"
+          AttributeType : "S"
+      KeySchema : 
+        -
+          AttributeName: "id"
+          KeyType: "HASH"
+      ProvisionedThroughput: 
+          ReadCapacityUnits: "5"
+          WriteCapacityUnits: "5"
+  
+  # API Gateway api definition
+  iotApiDef:
+    Type : AWS::Serverless::HttpApi
+    Properties:
+      StageName: prod
+#      Description: API for device access and connectors to network server resources
+
   # Lambda functions, hooked to eithe APIGateway REST API endpoints or SNS topics
   # Each Lambda function is defined by new SAM specific Function Resources:
   # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
 
   # The lambdas require a layer (with utility functions and an api to the DDB)
-  # TODO BUILD LAYER
+  # Layers:
+  iotUtilityLayer:
+      Type: AWS::Serverless::LayerVersion
+      Properties:
+        LayerName: iotUtilityLayer
+        Description: IOT DB and processing utilities
+        ContentUri: src/layers/iot_utility
+        CompatibleRuntimes:
+          - nodejs12.x
+        LicenseInfo: 'PROPRIETARY'
+        RetentionPolicy: Retain
+      Metadata:
+        BuildMethod: nodejs12.x             # Required to have AWS SAM build this layer
 
   # Lambda iot-dl-encode-appcore
-  iotdlencodeappcoreFunction:
+  iotDlEncodeAppcoreFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: src/lambdas/iot-dl-encode-appcore/index.handler
       Description: Lambda function to encode DL for appcore protocol
       Role: !Ref IOTOperationRole
       Events:
-        iot-dl-decoded-SNSSub-appcore:
+        iotDlDecodedSNSSubAppcore:
           Type: SNS
-          Topic: !Ref iot-dl-decoded-SNSTopic
+          Topic: !Ref iotDlDecodedSNSTopic
           FilterPolicy:
-            MsgProtocol:
+            msgProtocol:
               - app-core
 
   # Lambda iot-dl-raw-to-DB
-  iotdlrawtoDBFunction:
+  iotDlRawToDBFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: src/lambdas/iot-dl-raw-to-DB/index.handler
       Description: Lambda function to write raw DL messages to the DDB
       Role: !Ref IOTOperationRole
       Events:
-        iot-dl-raw-SNSSub:
+        iotDlRawSNSSub:
           Type: SNS
           Properties:
-            Topic: !Ref iot-dl-raw-SNSTopic
+            Topic: !Ref iotDlRawSNSTopic
 
   # Lambda iot-http-action-to-dl
-  iothttpactiontodlFunction:
+  iotHttpActionToDlFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: src/lambdas/iot-http-action-to-dl/index.handler
       Description: Lambda function to interpret http rest api action to create a DL
       Role: !Ref IOTOperationRole
       Events:
-        iot-action-HTTPAPI:
+        iotActionHTTPAPI:
           Type: HttpApi
           Properties:
             Path: /iot/action
             Method: ANY
-        iot-config-HTTPAPI:
+            RestApiId:
+              Ref: iotApiDef
+        iotConfigHTTPAPI:
           Type: HttpApi
           Properties:
             Path: /iot/config
             Method: ANY
+            RestApiId:
+              Ref: iotApiDef
                          
           
   # Lambda iot-ul-decode-appcore
-  iotuldecodeappcoreFunction:
+  iotUlDecodeAppcoreFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: src/lambdas/iot-ul-decode-appcore/index.handler
       Description: Lambda function to decode UL using the appcore protocol
       Role: !Ref IOTOperationRole
       Events:
-        iot-ul-raw-SNSSub-appcore:
+        iotUlRawSNSSubAppcore:
           Type: SNS
-          Topic: !Ref iot-ul-raw-SNSTopic
+          Topic: !Ref iotUlRawSNSTopic
           FilterPolicy:
-            MsgProtocol:
+            msgProtocol:
               - app-core
   
   # Lambda iot-ul-decoded-to-DB
-  iotuldecodedtoDBFunction:
+  iotUlDecodedToDBFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: src/lambdas/iot-ul-decoded-to-DB/index.handler
       Description: Lambda function to send UL decoded messages to the DDB
       Role: !Ref IOTOperationRole
       Events:
-        iot-ul-decoded-SNSSub:
+        iotUlDecodedSNSSub:
           Type: SNS
-          Topic: !Ref iot-ul-decoded-SNSTopic
+          Topic: !Ref iotUlDecodedSNSTopic
 
   # Lambda wmc-http-dl-event-to-sns
-  wmchttpdleventtosnsFunction:
+  wmcHttpDlEventToSnsFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: src/lambdas/wmc-http-dl-event-to-sns/index.handler
       Description: Lambda function to map WMC DL-Event http post to an SNS message
       Role: !Ref IOTOperationRole
       Events:
-        iot-wmc-dl-event-HTTPAPI:
+        iotWmcDlEventHTTPAPI:
           Type: HttpApi
           Properties:
             Path: /iot/wmc/dlevent
             Method: ANY
-      
+            RestApiId:
+              Ref: iotApiDef
+
   # Lambda wmc-http-ul-to-sns
-  wmchttpultosnsFunction:
+  wmcHttpUlToSnsFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: src/lambdas/wmc-http-ul-to-sns/index.handler
       Description: Lambda function to map WMC http POST for an UL to an SNS message
       Role: !Ref IOTOperationRole
       Events:
-        iot-wmc-ul-HTTPAPI:
+        iotWmcUlHTTPAPI:
           Type: HttpApi
           Properties:
             Path: /iot/wmc/dataup
             Method: ANY
+            RestApiId:
+              Ref: iotApiDef
 
   # Lambda wmc-sns-dl-to-http
-  wmcsnsdltohttpFunction:
+  wmcSnsDlToHttpFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: src/lambdas/wmc-sns-dl-to-http/index.handler
       Description: Lambda function to send DL message to WMC via HTTP POST
       Role: !Ref IOTOperationRole
+      Environment:
+        Variables:
+          WMC_SERVER: !Ref P_WMC_SERVER
+          WMC_USER: !Ref P_WMC_USER
+          WMC_PASS: !Ref P_WMC_PASS
       Events:
-        iot-dl-raw-SNSSub:
+        iotDlRawSNSSub:
           Type: SNS
           Properties:
-            Topic: !Ref iot-dl-raw-SNSTopic
-     
+            Topic: !Ref iotDlEawSNSTopic
+            FilterPolicy:
+              connector:
+                - KLK-WMC-V3-HTTP
+       
   # Lambda ttn-http-ul-to-sns
-  wmchttpultosnsFunction:
+  ttnHttpUlToSnsFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: src/lambdas/ttn-http-ul-to-sns/index.handler
       Description: Lambda function to map TTN http POST for an UL to an SNS message
       Role: !Ref IOTOperationRole
       Events:
-        iot-wmc-ul-HTTPAPI:
+        iotWmcUlHTTPAPI:
           Type: HttpApi
           Properties:
             Path: /iot/ttn/dataup
             Method: ANY
+            RestApiId:
+              Ref: iotApiDef
 
+  # Lambda ttn-sns-dl-to-http
+  ttnSnsDlToHttpFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/lambdas/ttn-sns-dl-to-http/index.handler
+      Description: Lambda function to send DL message to TTN via HTTP POST
+      Role: !Ref IOTOperationRole
+      Environment:
+        Variables:
+          TTN_SERVER: !Ref P_TTN_SERVER
+          TTN_KEY: !Ref P_TTN_KEY
+          TTN_APPID: !Ref P_TTN_APPID
+          TTN_PROCESSID: !Ref P_TTN_PROCESSID
+      Events:
+        iotDlRawSNSSub:
+          Type: SNS
+          Properties:
+            Topic: !Ref iotDlDawSNSTopic
+            FilterPolicy:
+              connector:
+                - TTN-HTTP
+       
   # Lambda iot-devices-list
-  iotdeviceslistFunction:
+  iotDevicesListFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: src/lambdas/iot-devices-list/index.handler
       Description: Lambda function for REST API to list devices in DB
       Role: !Ref IOTOperationRole
       Events:
-        iot-devices-list-HTTPAPI:
+        iotDevicesListHTTPAPI:
           Type: HttpApi
           Properties:
             Path: /iot/entities/{entity}/devices
             Method: GET
+            RestApiId:
+              Ref: iotApiDef
 
   # Lambda iot-device-CRUD
-  iotdeviceCRUDFunction:
+  iotDeviceCRUDFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: src/lambdas/iot-device-CRUD/index.handler
       Description: Lambda function for REST API to create/read/update/delete a device in DB
       Role: !Ref IOTOperationRole
       Events:
-        iot-device-CRUD-HTTPAPI:
+        iotDeviceCRUDHTTPAPI:
           Type: HttpApi
           Properties:
             Path: /iot/entities/{entity}/devices/{id}
             Method: ANY
+            RestApiId:
+              Ref: iotApiDef

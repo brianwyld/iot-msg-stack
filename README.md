@@ -10,11 +10,13 @@ It includes the following files and folders:
 - buildspec.yml -  A build specification file that tells AWS CodeBuild how to create a deployment package for the function.
 
 # Functionality
-The project provides a IOT message processing stack, which takes in 'uplink' messages from specific connectors (Kerlink WMC API is currently impletemented)
-and decodes them for application use. Decoded attributes are pushed to IOT Things if a related thing instance can be found (named as \<protocol\>-\<device address\> eg 'lora-38B8EBE000000DA5').
+The project provides a IOT message processing stack, which takes in 'uplink' messages from specific connectors (Kerlink WMC, TTN APIs are currently impletemented)
+and decodes them for application use. Decoded attributes are pushed to an Item in a DynamoDB Table per device (named as \<protocol\>-\<device address\> eg 'lora-38B8EBE000000DA5'), created automatically at first view. 
 
 The same functionality is provided in reverse for output 'downlink' messages (encoding, sending to connector).
 All uplink and downlink messages are pushed to a DynamoDB table (with a TTL of 5 days) for debug.
+
+A REST API allows to list Device Items in the DDB table, and CRUD each one.
 
 # Status
 The individual resource configurations and lambda code included in this application has been tested via the AWS console.
@@ -25,4 +27,3 @@ Currently the roles defined and attached to the lambdas are NOT suitable for a '
 # TODO
 - test deployment of packaged application
 - update security aspects
-- implement IOT Thing integration for 'state' (desired,reported) operation

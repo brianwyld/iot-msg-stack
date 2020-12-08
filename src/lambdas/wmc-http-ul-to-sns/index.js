@@ -4,6 +4,7 @@ var aws  = require('aws-sdk');
 var ddb_device = require('ddb_device');
 var sns = require('sns');
 
+let CONNECTOR = 'KLK-WMC-V3-HTTP';
 var UL_TOPIC = "arn:aws:sns:eu-west-1:581930022841:iot-ul-raw";
 exports.handler = async (event) => {
     console.log("rx: "+JSON.stringify(event));
@@ -30,7 +31,7 @@ exports.handler = async (event) => {
                 type : 'lora',
                 msgProtocol: device.msgProtocol,
                 appTag : device.appTag,
-                connector : 'KLK-WMC-V3-HTTP',
+                connector : CONNECTOR,
                 rxTime : postdata.recvTime,
                 payload: { fPort: postdata.fPort, fCntUp:postdata.fCntUp, fCntDown:postdata.fCntDown }
             };

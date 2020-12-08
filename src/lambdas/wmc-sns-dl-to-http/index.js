@@ -1,13 +1,13 @@
 // Receive DL messages with the raw hex data from the SNS topic and push them to WMC
-// TODO how do we know to route to WMC?
-// TODO config of the WMC url etc ?
+// SNS subscribe should filter on Connector='KLK-WMC-V3-HTTP' (as set on UL from same connector)
 
 var aws  = require('aws-sdk');
 var httpclient = require('https');
 
-let WMC_USER = 'wyld-things-app';       // MOVE TO ENV VARS
-let WMC_PASS = 'wyld-things01';
-let WMC_SERVER = 'https://wmc-poc.wanesy.com';
+// account config is in env vars
+let WMC_USER = process.env.WMC_USER;
+let WMC_PASS = process.env.WMC_PASS;
+let WMC_SERVER = process.env.WMC_SERVER;
 
 let WMC_URL_SEND_DL =   WMC_SERVER+'/gms/application/dataDown';
 let WMC_URL_GET_TOKEN = WMC_SERVER+'/gms/application/login';
@@ -67,7 +67,7 @@ function getAddr(did) {
     if (di<0) {
         return did;
     }
-    return did.substr(di);
+    return did.substr(di+1);
 }
 
 // execute token get, returns promise to execute
@@ -150,7 +150,7 @@ async function https_post(url, body, hdrs={}) {
             if (res.statusCode>=200 && res.statusCode<=299) {
                 resolve(res);
             } else {
-                reject(Error('bad POST response from  ['+url+'] :'+res.statusCode));
+                reject(Error('bad POST response from  ['+url+'] :'+res.statusCode+"/"+res.statusMessage));
             }
         });
     
